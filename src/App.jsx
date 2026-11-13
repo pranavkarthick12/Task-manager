@@ -137,11 +137,11 @@ export default function App() {
 
     try {
       if (id) {
-        // Update existing task in Firestore
-        await apiUpdateTask(id, { title, description });
+        // Update existing task in Firestore under users/{uid}/tasks/{id}
+        await apiUpdateTask(currentUser.uid, id, { title, description });
         showNotification('Task updated successfully.');
       } else {
-        // Create new task in Firestore scoped to currentUser.uid
+        // Create new task in Firestore scoped to users/{uid}/tasks
         await apiCreateTask({
           title,
           description,
@@ -156,10 +156,11 @@ export default function App() {
     }
   };
 
-  // Update task status handler in Firestore
+  // Update task status handler in Firestore under users/{uid}/tasks/{taskId}
   const handleStatusChange = async (taskId, newStatus) => {
+    if (!currentUser) return;
     try {
-      await apiUpdateTaskStatus(taskId, newStatus);
+      await apiUpdateTaskStatus(currentUser.uid, taskId, newStatus);
       showNotification(`Task status updated to "${newStatus}".`);
     } catch (err) {
       console.error('Status update error:', err);
@@ -172,12 +173,12 @@ export default function App() {
     setTaskToDelete(task);
   };
 
-  // Confirm delete handler in Firestore
+  // Confirm delete handler in Firestore under users/{uid}/tasks/{taskId}
   const handleConfirmDelete = async () => {
-    if (!taskToDelete) return;
+    if (!taskToDelete || !currentUser) return;
     try {
       setIsDeleting(true);
-      await apiDeleteTask(taskToDelete.id);
+      await apiDeleteTask(currentUser.uid, taskToDelete.id);
       showNotification('Task deleted successfully.');
       setTaskToDelete(null);
     } catch (err) {
@@ -229,16 +230,37 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-500 hidden sm:inline-block">
-              {currentUser.email}
-            </span>
+            {/* User Profile in Header */}
+            <div className="flex items-center gap-2.5">
+              {currentUser.photoURL ? (
+                <img
+                  src={currentUser.photoURL}
+                  alt={currentUser.displayName || 'Google Profile'}
+                  className="w-8 h-8 rounded-full border border-gray-200 object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-gray-100 border border-gray-200 text-gray-700 flex items-center justify-center text-xs font-semibold">
+                  {(currentUser.displayName || currentUser.email || 'U')[0].toUpperCase()}
+                </div>
+              )}
+              <div className="hidden sm:flex flex-col text-left">
+                <span className="text-xs font-semibold text-gray-900 leading-tight">
+                  {currentUser.displayName || 'Google User'}
+                </span>
+                <span className="text-[11px] text-gray-500 leading-tight">
+                  {currentUser.email}
+                </span>
+              </div>
+            </div>
+
             <button
               type="button"
               onClick={handleLogout}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-900 transition-colors"
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span>Logout</span>
+              <span>Sign Out</span>
             </button>
           </div>
         </div>
@@ -249,14 +271,29 @@ export default function App() {
         {/* Welcome Section & Dashboard Header */}
         <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">
-                Welcome, {userGreetingName}
-              </h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Manage your tasks and track real-time progress.
-              </p>
+            <div className="flex items-center gap-3.5">
+              {currentUser.photoURL ? (
+                <img
+                  src={currentUser.photoURL}
+                  alt={currentUser.displayName || 'Google Profile'}
+                  className="w-12 h-12 rounded-full border border-gray-200 object-cover shadow-sm"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-gray-100 border border-gray-200 text-gray-700 flex items-center justify-center text-lg font-semibold shadow-sm">
+                  {(currentUser.displayName || currentUser.email || 'U')[0].toUpperCase()}
+                </div>
+              )}
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  Welcome, {currentUser.displayName || userGreetingName}
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {currentUser.email} • Track and manage your real-time tasks
+                </p>
+              </div>
             </div>
+
             <button
               type="button"
               onClick={handleOpenCreateModal}

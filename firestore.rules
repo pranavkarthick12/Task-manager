@@ -1,24 +1,15 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Tasks collection: strictly scoped to the authenticated task owner
+    // Isolated task subcollections per user: users/{userId}/tasks/{taskId}
+    match /users/{userId}/tasks/{taskId} {
+      // Authenticated user can read, create, update, and delete only their own tasks
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Top-level tasks collection (backward-compatible fallback)
     match /tasks/{taskId} {
-      // Users can only read tasks where userId matches their authenticated UID
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-
-      // Users can only create tasks where userId matches their authenticated UID
-      allow create: if request.auth != null 
-                    && request.resource.data.userId == request.auth.uid
-                    && request.resource.data.title is string
-                    && request.resource.data.title.size() > 0;
-
-      // Users can only update their own tasks and cannot reassign ownership
-      allow update: if request.auth != null 
-                    && resource.data.userId == request.auth.uid
-                    && request.resource.data.userId == request.auth.uid;
-
-      // Users can only delete their own tasks
-      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow read, write: if request.auth != null && (resource == null || resource.data.userId == request.auth.uid);
     }
   }
 }

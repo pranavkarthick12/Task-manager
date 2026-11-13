@@ -1,15 +1,14 @@
 /**
  * Task Service (Firebase Cloud Firestore)
  * 
- * Manages task operations directly with Firestore 'tasks' collection.
+ * Manages task operations directly within the user's isolated subcollection:
+ * Path: users/{uid}/tasks/{taskId}
  * Every task document includes title, description, status, createdAt, and userId.
- * Real-time synchronization is handled via onSnapshot filtered by userId.
+ * Real-time synchronization is handled via onSnapshot on the user's subcollection.
  */
 
 import {
   collection,
-  query,
-  where,
   onSnapshot,
   addDoc,
   doc,
@@ -31,8 +30,18 @@ export const STATUS_LIST = [
 ];
 
 /**
- * Subscribe to real-time task updates for the authenticated user.
- * Filters tasks strictly by userId and sorts them by creation date.
+ * Helper to get the Firestore collection reference for a user's tasks:
+ * users/{userId}/tasks
+ */
+export const getUserTasksCollection = (userId) => {
+  if (!userId) {
+    throw new Error('User ID is required to access tasks collection.');
+  }
+  return collection(db, 'users', userId, 'tasks');
+};
+
+/**
+ * Subscribe to real-time task updates for the authenticated user under users/{uid}/tasks.
  * Returns an unsubscribe function to be called on component unmount.
  */
 export const subscribeToUserTasks = (userId, onTasksUpdate, onError) => {
@@ -41,11 +50,10 @@ export const subscribeToUserTasks = (userId, onTasksUpdate, onError) => {
     return () => {};
   }
 
-  const tasksCollection = collection(db, 'tasks');
-  const userTasksQuery = query(tasksCollection, where('userId', '==', userId));
+  const userTasksRef = getUserTasksCollection(userId);
 
   return onSnapshot(
-    userTasksQuery,
+    userTasksRef,
     (snapshot) => {
       const tasks = snapshot.docs.map((docSnap) => ({
         id: docSnap.id,
@@ -65,7 +73,7 @@ export const subscribeToUserTasks = (userId, onTasksUpdate, onError) => {
 };
 
 /**
- * Create a new task in Firestore
+ * Create a new task in Firestore under users/{userId}/tasks
  * Enforces title validation, default status 'Planned', createdAt ISO string, and userId.
  */
 export const createTask = async ({ title, description, userId }) => {
@@ -86,7 +94,7 @@ export const createTask = async ({ title, description, userId }) => {
     userId,
   };
 
-  const docRef = await addDoc(collection(db, 'tasks'), taskPayload);
+  const docRef = await addDoc(getUserTasksCollection(userId), taskPayload);
 
   return {
     id: docRef.id,
@@ -95,19 +103,19 @@ export const createTask = async ({ title, description, userId }) => {
 };
 
 /**
- * Update an existing task's title and description
+ * Update an existing task's title and description under users/{userId}/tasks/{taskId}
  */
-export const updateTask = async (taskId, { title, description }) => {
+export const updateTask = async (userId, taskId, { title, description }) => {
   const trimmedTitle = title.trim();
   if (!trimmedTitle) {
     throw new Error('Task title cannot be empty.');
   }
 
-  if (!taskId) {
-    throw new Error('Task ID is required for update.');
+  if (!userId || !taskId) {
+    throw new Error('User ID and Task ID are required for update.');
   }
 
-  const taskRef = doc(db, 'tasks', taskId);
+  const taskRef = doc(db, 'users', userId, 'tasks', taskId);
   await updateDoc(taskRef, {
     title: trimmedTitle,
     description: description ? description.trim() : '',
@@ -117,32 +125,32 @@ export const updateTask = async (taskId, { title, description }) => {
 };
 
 /**
- * Update task status (Planned, In Progress, Complete)
+ * Update task status (Planned, In Progress, Complete) under users/{userId}/tasks/{taskId}
  */
-export const updateTaskStatus = async (taskId, newStatus) => {
+export const updateTaskStatus = async (userId, taskId, newStatus) => {
   if (!STATUS_LIST.includes(newStatus)) {
     throw new Error(`Invalid status: ${newStatus}`);
   }
 
-  if (!taskId) {
-    throw new Error('Task ID is required for status update.');
+  if (!userId || !taskId) {
+    throw new Error('User ID and Task ID are required for status update.');
   }
 
-  const taskRef = doc(db, 'tasks', taskId);
+  const taskRef = doc(db, 'users', userId, 'tasks', taskId);
   await updateDoc(taskRef, { status: newStatus });
 
   return { id: taskId, status: newStatus };
 };
 
 /**
- * Delete a task document from Firestore
+ * Delete a task document from Firestore under users/{userId}/tasks/{taskId}
  */
-export const deleteTask = async (taskId) => {
-  if (!taskId) {
-    throw new Error('Task ID is required for deletion.');
+export const deleteTask = async (userId, taskId) => {
+  if (!userId || !taskId) {
+    throw new Error('User ID and Task ID are required for deletion.');
   }
 
-  const taskRef = doc(db, 'tasks', taskId);
+  const taskRef = doc(db, 'users', userId, 'tasks', taskId);
   await deleteDoc(taskRef);
 
   return { id: taskId, success: true };
